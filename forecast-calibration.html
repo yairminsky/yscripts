@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<!-- This script was generated using Claude (free version) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forecast Calibration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --surface2: #eeecea;
+    --border: #d8d5ce;
+    --text: #1a1917;
+    --muted: #6b6860;
+    --accent: #1a5fb4;
+    --accent-light: #ddeafc;
+    --good: #1c6c3a;
+    --good-light: #d6f0e0;
+    --warn: #8a3a00;
+    --warn-light: #fde8d0;
+    --diagonal: #bbb8b0;
+    --rain-line: #1a5fb4;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 2.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+  }
+
+  header h1 {
+    font-family: 'DM Mono', monospace;
+    font-weight: 400;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+  }
+
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+  }
+
+  .controls {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  label {
+    display: block;
+    font-size: 0.72rem;
+    font-family: 'DM Mono', monospace;
+    font-weight: 400;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 300;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .range-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    min-width: 48px;
+    text-align: right;
+  }
+
+  .controls-footer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  button#fetchBtn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.65rem 1.75rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button#fetchBtn:hover { opacity: 0.88; }
+  button#fetchBtn:active { transform: scale(0.98); }
+  button#fetchBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  #status {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .error-box {
+    display: none;
+    background: #fff0ee;
+    border: 1px solid #f5c0b8;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    color: #8b2a1a;
+    margin-bottom: 1.5rem;
+  }
+
+  .metrics {
+    display: none;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+  .metric-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.45rem;
+  }
+  .metric-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.3rem;
+    font-weight: 500;
+  }
+
+  .chart-card {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem 1.5rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+
+  .chart-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.25rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch {
+    width: 22px;
+    height: 3px;
+    border-radius: 2px;
+  }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(90deg, var(--diagonal) 0, var(--diagonal) 5px, transparent 5px, transparent 9px);
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 340px;
+  }
+
+  .bin-table {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+
+  .bin-table-header {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px 90px 90px;
+    gap: 0;
+    padding: 0.6rem 1.25rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .bin-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px 90px 90px;
+    gap: 0;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    align-items: center;
+    transition: background 0.1s;
+  }
+  .bin-row:last-child { border-bottom: none; }
+  .bin-row:hover { background: var(--bg); }
+
+  .bar-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mini-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mini-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: width 0.5s ease;
+  }
+
+  .pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .pill.over { background: var(--warn-light); color: var(--warn); }
+  .pill.under { background: var(--good-light); color: var(--good); }
+  .pill.neutral { background: var(--surface2); color: var(--muted); }
+
+  footer {
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    padding: 1.5rem 0 2rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>forecast calibration</h1>
+  <p>how well do predicted rain probabilities match reality?</p>
+</header>
+
+<main>
+
+  <div class="controls">
+    <div class="controls-grid">
+      <div>
+        <label for="locationInput">Location</label>
+        <input type="text" id="locationInput" placeholder="e.g. London, Tokyo, Sydney" value="London" />
+      </div>
+      <div>
+        <label>Days back to analyse: <span id="daysLabel">180</span></label>
+        <div class="range-row">
+          <input type="range" id="daysRange" min="30" max="900" value="180" step="1"
+            oninput="document.getElementById('daysLabel').textContent = this.value" />
+          <span class="range-val" id="daysValDisplay">180 days</span>
+        </div>
+      </div>
+      <div>
+        <label>Bin size: <span id="binLabel">10</span>%</label>
+        <div class="range-row">
+          <input type="range" id="binRange" min="2" max="25" value="10" step="1"
+            oninput="document.getElementById('binLabel').textContent = this.value" />
+          <span class="range-val" id="binValDisplay">10%</span>
+        </div>
+      </div>
+    </div>
+    <div class="controls-footer">
+      <button id="fetchBtn" onclick="runAnalysis()">Analyse</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="metrics" id="metrics">
+    <div class="metric">
+      <div class="metric-label">Hourly readings</div>
+      <div class="metric-value" id="m-total">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Actual rain rate</div>
+      <div class="metric-value" id="m-rainrate">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Mean predicted</div>
+      <div class="metric-value" id="m-meanpred">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Bias</div>
+      <div class="metric-value" id="m-bias">—</div>
+    </div>
+  </div>
+
+  <div class="chart-card" id="chartCard">
+    <div class="chart-header">
+      <span class="chart-title">calibration curve</span>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-swatch dashed"></div>
+          <span>perfect calibration</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background: var(--rain-line);"></div>
+          <span>observed frequency</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="calChart" role="img" aria-label="Calibration curve: predicted probability vs observed rain frequency"></canvas>
+    </div>
+  </div>
+
+  <div class="bin-table" id="binTable">
+    <div class="bin-table-header">
+      <span>Predicted bin</span>
+      <span>Sample</span>
+      <span>Actual</span>
+      <span>Expected</span>
+      <span>Error</span>
+    </div>
+    <div id="binRows"></div>
+  </div>
+
+  <footer>
+    Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Historical Forecast API &amp; Archive API &mdash; free, open, no key required.
+  </footer>
+
+</main>
+
+<script>
+let chartInstance = null;
+
+const daysRange = document.getElementById('daysRange');
+const daysValDisplay = document.getElementById('daysValDisplay');
+daysRange.addEventListener('input', () => {
+  daysValDisplay.textContent = daysRange.value + ' days';
+});
+
+const binRange = document.getElementById('binRange');
+const binValDisplay = document.getElementById('binValDisplay');
+binRange.addEventListener('input', () => {
+  binValDisplay.textContent = binRange.value + '%';
+});
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function showError(msg) {
+  const b = document.getElementById('errorBox');
+  b.style.display = 'block';
+  b.textContent = 'Error: ' + msg;
+}
+
+function hideError() {
+  document.getElementById('errorBox').style.display = 'none';
+}
+
+function isoDate(d) {
+  return d.toISOString().split('T')[0];
+}
+
+async function geocode(location) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Geocoding request failed (HTTP ' + r.status + ')');
+  const d = await r.json();
+  if (!d.results || d.results.length === 0) throw new Error(`Location not found: "${location}"`);
+  const res = d.results[0];
+  return {
+    lat: res.latitude,
+    lon: res.longitude,
+    name: [res.name, res.admin1, res.country].filter(Boolean).join(', ')
+  };
+}
+
+async function runAnalysis() {
+  hideError();
+  document.getElementById('metrics').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
+  document.getElementById('binTable').style.display = 'none';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+  const location = document.getElementById('locationInput').value.trim();
+  const daysBack = parseInt(document.getElementById('daysRange').value);
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+
+  try {
+    setStatus('Geocoding location…');
+    const geo = await geocode(location);
+
+    // End 2 days ago to ensure archive data is available
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() - 2);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - daysBack);
+
+    // Previous Runs API only has data from Jan 2024
+    const earliestAllowed = new Date('2024-01-01');
+    if (startDate < earliestAllowed) startDate.setTime(earliestAllowed.getTime());
+
+    const start = isoDate(startDate);
+    const end = isoDate(endDate);
+
+    setStatus(`Fetching historical forecasts for ${geo.name}…`);
+    const forecastUrl = `https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation_probability&models=best_match&timezone=UTC`;
+    const fr = await fetch(forecastUrl);
+    if (!fr.ok) throw new Error('Forecast API request failed (HTTP ' + fr.status + ')');
+    const fd = await fr.json();
+    if (fd.error) throw new Error('Forecast API: ' + fd.reason);
+
+    setStatus('Fetching observed precipitation…');
+    const obsUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation&timezone=UTC`;
+    const or = await fetch(obsUrl);
+    if (!or.ok) throw new Error('Archive API request failed (HTTP ' + or.status + ')');
+    const od = await or.json();
+    if (od.error) throw new Error('Archive API: ' + od.reason);
+
+    if (!fd.hourly?.precipitation_probability || !od.hourly?.precipitation) {
+      throw new Error('API returned unexpected data structure. The location may lack forecast coverage.');
+    }
+
+    setStatus('Computing calibration…');
+
+    const probs = fd.hourly.precipitation_probability;
+    const precip = od.hourly.precipitation;
+
+    const binSize = parseInt(document.getElementById('binRange').value);
+    const numBins = Math.ceil(100 / binSize);
+    const bins = Array.from({length: numBins}, (_, i) => {
+      const lo = i * binSize;
+      const hi = Math.min(lo + binSize, 100);
+      return { lo, hi, mid: (lo + hi) / 2, label: `${lo}\u2013${hi}%`, count: 0, rained: 0 };
+    });
+
+    let totalRain = 0, totalProbSum = 0, validCount = 0;
+
+    for (let i = 0; i < probs.length; i++) {
+      const p = probs[i];
+      const pr = precip[i];
+      if (p === null || p === undefined || pr === null || pr === undefined) continue;
+      const binIdx = Math.min(Math.floor(p / binSize), numBins - 1);
+      const didRain = pr > 0.1 ? 1 : 0;
+      bins[binIdx].count++;
+      bins[binIdx].rained += didRain;
+      totalRain += didRain;
+      totalProbSum += p;
+      validCount++;
+    }
+
+    if (validCount === 0) throw new Error('No valid data pairs found for this location and date range.');
+
+    const overallRainRate = (totalRain / validCount * 100);
+    const meanPred = (totalProbSum / validCount);
+    const bias = meanPred - overallRainRate;
+
+    document.getElementById('m-total').textContent = validCount.toLocaleString();
+    document.getElementById('m-rainrate').textContent = overallRainRate.toFixed(1) + '%';
+    document.getElementById('m-meanpred').textContent = meanPred.toFixed(1) + '%';
+    const biasText = (bias > 0 ? '+' : '') + bias.toFixed(1) + '%';
+    const biasEl = document.getElementById('m-bias');
+    biasEl.textContent = biasText;
+    biasEl.style.color = Math.abs(bias) < 2 ? 'inherit' : (bias > 0 ? 'var(--warn)' : 'var(--good)');
+
+    document.getElementById('metrics').style.display = 'grid';
+
+    // Only plot bins with enough data
+    const activeBins = bins.filter(b => b.count >= 5);
+    const labels = activeBins.map(b => b.label);
+    const actuals = activeBins.map(b => parseFloat((b.rained / b.count * 100).toFixed(2)));
+    const mids = activeBins.map(b => b.mid);
+    const counts = activeBins.map(b => b.count);
+
+    document.getElementById('chartCard').style.display = 'block';
+    const ctx = document.getElementById('calChart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Perfect calibration',
+            data: mids,
+            borderColor: '#bbb8b0',
+            borderDash: [7, 5],
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 2
+          },
+          {
+            label: 'Observed rain frequency',
+            data: actuals,
+            borderColor: '#1a5fb4',
+            backgroundColor: 'rgba(26,95,180,0.08)',
+            borderWidth: 2.5,
+            pointRadius: 6,
+            pointBackgroundColor: '#1a5fb4',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            fill: true,
+            tension: 0.15,
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff',
+            borderColor: '#d8d5ce',
+            borderWidth: 1,
+            titleColor: '#1a1917',
+            bodyColor: '#6b6860',
+            titleFont: { family: 'DM Mono', size: 12 },
+            bodyFont: { family: 'DM Mono', size: 11 },
+            padding: 10,
+            callbacks: {
+              title: (items) => items[0].label,
+              beforeBody: (items) => {
+                const idx = items[0].dataIndex;
+                return [
+                  `Predicted mid: ${mids[idx]}%`,
+                  `Observed: ${actuals[idx]}%`,
+                  `Sample: ${counts[idx].toLocaleString()} hrs`
+                ];
+              },
+              label: () => null
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            ticks: {
+              font: { family: 'DM Mono', size: 11 },
+              color: '#6b6860',
+              autoSkip: false,
+              maxRotation: 40
+            },
+            title: {
+              display: true,
+              text: 'predicted probability bin',
+              font: { family: 'DM Mono', size: 11 },
+              color: '#6b6860'
+            }
+          },
+          y: {
+            min: 0, max: 100,
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            ticks: {
+              font: { family: 'DM Mono', size: 11 },
+              color: '#6b6860',
+              callback: v => v + '%'
+            },
+            title: {
+              display: true,
+              text: 'actual rain frequency',
+              font: { family: 'DM Mono', size: 11 },
+              color: '#6b6860'
+            }
+          }
+        }
+      }
+    });
+
+    // Build bin table
+    const rowsHtml = activeBins.map((b, i) => {
+      const actual = actuals[i];
+      const expected = b.mid;
+      const err = actual - expected;
+      const errStr = (err >= 0 ? '+' : '') + err.toFixed(1) + 'pp';
+      const pillClass = Math.abs(err) < 3 ? 'neutral' : (err > 0 ? 'over' : 'under');
+      const pillLabel = Math.abs(err) < 3 ? 'on target' : (err > 0 ? 'over' : 'under');
+      const barPct = Math.min(100, (b.count / Math.max(...counts)) * 100).toFixed(1);
+      return `
+        <div class="bin-row">
+          <div class="bar-cell">
+            <span style="font-size:0.8rem;min-width:70px;">${b.label}</span>
+            <div class="mini-bar-wrap"><div class="mini-bar" style="width:${barPct}%"></div></div>
+          </div>
+          <span>${b.count.toLocaleString()}</span>
+          <span>${actual.toFixed(1)}%</span>
+          <span style="color:#6b6860">${expected}%</span>
+          <span><span class="pill ${pillClass}">${errStr}</span></span>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('binRows').innerHTML = rowsHtml;
+    document.getElementById('binTable').style.display = 'block';
+
+    setStatus(`${validCount.toLocaleString()} readings · ${geo.name} · ${start} → ${end}`);
+
+  } catch (e) {
+    setStatus('');
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
