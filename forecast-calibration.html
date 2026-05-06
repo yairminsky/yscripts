@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- This script was generated using Claude (free version) -->
+<!-- This script was generated using Claude. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -315,6 +315,43 @@
     padding: 1.5rem 0 2rem;
   }
   footer a { color: var(--accent); text-decoration: none; }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.1rem;
+  }
+  .toggle-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .mode-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.3rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .mode-desc {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-style: italic;
+    margin-left: 0.4rem;
+  }
 </style>
 </head>
 <body>
@@ -330,7 +367,8 @@
     <div class="controls-grid">
       <div>
         <label for="locationInput">Location</label>
-        <input type="text" id="locationInput" placeholder="e.g. London, Tokyo, Sydney" value="London" />
+        <input type="text" id="locationInput" placeholder="e.g. London, Tokyo, Sydney"
+               value="New Haven" />
       </div>
       <div>
         <label>Days back to analyse: <span id="daysLabel">180</span></label>
@@ -349,6 +387,12 @@
         </div>
       </div>
     </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Mode:</span>
+      <button class="mode-btn active" id="btnHourly" onclick="setMode('hourly')">Hourly</button>
+      <button class="mode-btn" id="btnDaily" onclick="setMode('daily')">Daily</button>
+      <span class="mode-desc" id="modeDesc">Each hourly reading treated independently</span>
+    </div>
     <div class="controls-footer">
       <button id="fetchBtn" onclick="runAnalysis()">Analyse</button>
       <span id="status"></span>
@@ -359,7 +403,7 @@
 
   <div class="metrics" id="metrics">
     <div class="metric">
-      <div class="metric-label">Hourly readings</div>
+      <div class="metric-label" id="m-total-label">Hourly readings</div>
       <div class="metric-value" id="m-total">—</div>
     </div>
     <div class="metric">
@@ -414,6 +458,16 @@
 
 <script>
 let chartInstance = null;
+let currentMode = 'hourly';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnHourly').classList.toggle('active', mode === 'hourly');
+  document.getElementById('btnDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('modeDesc').textContent = mode === 'hourly'
+    ? 'Each hourly reading treated independently'
+    : 'Daily max forecast probability vs any rain that day';
+}
 
 const daysRange = document.getElementById('daysRange');
 const daysValDisplay = document.getElementById('daysValDisplay');
@@ -489,27 +543,52 @@ async function runAnalysis() {
     const end = isoDate(endDate);
 
     setStatus(`Fetching historical forecasts for ${geo.name}…`);
-    const forecastUrl = `https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation_probability&models=best_match&timezone=UTC`;
-    const fr = await fetch(forecastUrl);
-    if (!fr.ok) throw new Error('Forecast API request failed (HTTP ' + fr.status + ')');
-    const fd = await fr.json();
-    if (fd.error) throw new Error('Forecast API: ' + fd.reason);
 
-    setStatus('Fetching observed precipitation…');
-    const obsUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation&timezone=UTC`;
-    const or = await fetch(obsUrl);
-    if (!or.ok) throw new Error('Archive API request failed (HTTP ' + or.status + ')');
-    const od = await or.json();
-    if (od.error) throw new Error('Archive API: ' + od.reason);
+    let probs, precip;
 
-    if (!fd.hourly?.precipitation_probability || !od.hourly?.precipitation) {
-      throw new Error('API returned unexpected data structure. The location may lack forecast coverage.');
+    if (currentMode === 'daily') {
+      // Daily mode: max predicted probability vs whether any rain fell that day
+      const forecastUrl = `https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&daily=precipitation_probability_max&models=best_match&timezone=UTC`;
+      const fr = await fetch(forecastUrl);
+      if (!fr.ok) throw new Error('Forecast API request failed (HTTP ' + fr.status + ')');
+      const fd = await fr.json();
+      if (fd.error) throw new Error('Forecast API: ' + fd.reason);
+
+      setStatus('Fetching observed precipitation…');
+      const obsUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&daily=precipitation_sum&timezone=UTC`;
+      const or = await fetch(obsUrl);
+      if (!or.ok) throw new Error('Archive API request failed (HTTP ' + or.status + ')');
+      const od = await or.json();
+      if (od.error) throw new Error('Archive API: ' + od.reason);
+
+      if (!fd.daily?.precipitation_probability_max || !od.daily?.precipitation_sum) {
+        throw new Error('API returned unexpected data structure. The location may lack daily forecast coverage.');
+      }
+      probs = fd.daily.precipitation_probability_max;
+      precip = od.daily.precipitation_sum;
+    } else {
+      // Hourly mode (original)
+      const forecastUrl = `https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation_probability&models=best_match&timezone=UTC`;
+      const fr = await fetch(forecastUrl);
+      if (!fr.ok) throw new Error('Forecast API request failed (HTTP ' + fr.status + ')');
+      const fd = await fr.json();
+      if (fd.error) throw new Error('Forecast API: ' + fd.reason);
+
+      setStatus('Fetching observed precipitation…');
+      const obsUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${start}&end_date=${end}&hourly=precipitation&timezone=UTC`;
+      const or = await fetch(obsUrl);
+      if (!or.ok) throw new Error('Archive API request failed (HTTP ' + or.status + ')');
+      const od = await or.json();
+      if (od.error) throw new Error('Archive API: ' + od.reason);
+
+      if (!fd.hourly?.precipitation_probability || !od.hourly?.precipitation) {
+        throw new Error('API returned unexpected data structure. The location may lack forecast coverage.');
+      }
+      probs = fd.hourly.precipitation_probability;
+      precip = od.hourly.precipitation;
     }
 
     setStatus('Computing calibration…');
-
-    const probs = fd.hourly.precipitation_probability;
-    const precip = od.hourly.precipitation;
 
     const binSize = parseInt(document.getElementById('binRange').value);
     const numBins = Math.ceil(100 / binSize);
@@ -540,6 +619,7 @@ async function runAnalysis() {
     const meanPred = (totalProbSum / validCount);
     const bias = meanPred - overallRainRate;
 
+    document.getElementById('m-total-label').textContent = currentMode === 'daily' ? 'Daily readings' : 'Hourly readings';
     document.getElementById('m-total').textContent = validCount.toLocaleString();
     document.getElementById('m-rainrate').textContent = overallRainRate.toFixed(1) + '%';
     document.getElementById('m-meanpred').textContent = meanPred.toFixed(1) + '%';
